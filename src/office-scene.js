@@ -1,12 +1,14 @@
 import * as THREE from 'three';
+import {createPointerGesture,renderProfile} from './input.js';
 
 /** Standalone renderer. All states are supplied by the caller; no network or AI calls. */
-export function createOfficeScene(container, { onSelect = () => {}, reducedMotion = false } = {}) {
+export function createOfficeScene(container, { onSelect = () => {}, onRenderState = () => {}, reducedMotion = false } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#e9e4d9');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.7));
-  renderer.shadowMap.enabled = true;
+  let profile=renderProfile({width:container.clientWidth,coarse:matchMedia('(pointer: coarse)').matches,dpr:devicePixelRatio||1,reducedMotion});
+  renderer.setPixelRatio(profile.pixelRatio);
+  renderer.shadowMap.enabled = profile.shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.setAttribute('aria-label', '可旋转的 AI 虚拟办公室，点击人物查看状态');
@@ -98,14 +100,18 @@ export function createOfficeScene(container, { onSelect = () => {}, reducedMotio
   const confetti=[];
   for(let i=0;i<38;i++){const m=box(.055,.12,.02,['#c1906d','#8fb09d','#e6bf62','#9a8bb6'][i%4],0,-10,0);m.visible=false;confetti.push(m);}
   let celebrating=false, celebrationStart=0, disposed=false, raf=0, last=performance.now();
-  const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();let drag=null;
-  const down=e=>{drag={x:e.clientX,y:e.clientY,yaw,target:targetYaw,moved:false};renderer.domElement.setPointerCapture?.(e.pointerId);};
-  const move=e=>{if(!drag)return;const dx=e.clientX-drag.x; if(Math.abs(dx)>5)drag.moved=true;targetYaw=drag.target-dx*.008;};
-  const up=e=>{if(!drag)return;if(!drag.moved){const b=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(pickables)[0];if(hit)onSelect(hit.object.userData.agentId);}drag=null;};
-  renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',()=>{drag=null;});
-  function resize(){const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;distance=w/h<1?24:19;camera.updateProjectionMatrix();}
+  const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();
+  const gesture=createPointerGesture();let dragYaw=targetYaw,contextLost=false;
+  const down=e=>{if(gesture.start(e)){dragYaw=targetYaw;renderer.domElement.setPointerCapture?.(e.pointerId);}};
+  const move=e=>{const movement=gesture.move(e);if(movement?.horizontal&&movement.moved)targetYaw=dragYaw-movement.dx*.008;};
+  const up=e=>{const tap=gesture.end(e);if(renderer.domElement.hasPointerCapture?.(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);if(tap){const b=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(pickables)[0];if(hit)onSelect(hit.object.userData.agentId);}};
+  const cancel=()=>gesture.cancel();
+  const lost=e=>{e.preventDefault();contextLost=true;cancelAnimationFrame(raf);gesture.cancel();onRenderState('recovering');};
+  const restored=()=>{if(disposed)return;contextLost=false;last=performance.now();onRenderState('ready');raf=requestAnimationFrame(tick);};
+  renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',cancel);renderer.domElement.addEventListener('lostpointercapture',cancel);renderer.domElement.addEventListener('webglcontextlost',lost);renderer.domElement.addEventListener('webglcontextrestored',restored);
+  function resize(){const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;profile=renderProfile({width:w,coarse:matchMedia('(pointer: coarse)').matches,dpr:devicePixelRatio||1,reducedMotion});renderer.setPixelRatio(profile.pixelRatio);renderer.shadowMap.enabled=profile.shadows;renderer.setSize(w,h);camera.aspect=w/h;distance=w/h<1?24:19;camera.updateProjectionMatrix();}
   const observer=new ResizeObserver(resize);observer.observe(container);resize();
-  function tick(now){if(disposed)return;const dt=Math.min((now-last)/1000,.05);last=now;yaw+=(targetYaw-yaw)*(reducedMotion?1:.12);camera.position.set(Math.sin(yaw)*Math.cos(pitch)*distance,Math.sin(pitch)*distance,Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(aim);
+  function tick(now){if(disposed||contextLost)return;if(document.hidden||now-last<1000/profile.fps){raf=requestAnimationFrame(tick);return;}const dt=Math.min((now-last)/1000,.05);last=now;yaw+=(targetYaw-yaw)*(reducedMotion?1:.12);camera.position.set(Math.sin(yaw)*Math.cos(pitch)*distance,Math.sin(pitch)*distance,Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(aim);
     let i=0;for(const a of agents.values()){const delta=a.target.clone().sub(a.group.position);const moving=delta.length()>.035;if(reducedMotion)a.group.position.copy(a.target);else a.group.position.addScaledVector(delta,Math.min(1,dt*2.2));if(moving&&!reducedMotion)a.group.rotation.y=Math.atan2(delta.x,delta.z);else a.group.rotation.y=Math.PI;
       const swing=moving&&!reducedMotion?Math.sin(now*.012+i)*.38:0;a.left.rotation.x=swing;a.right.rotation.x=-swing;a.body.rotation.x=a.status==='working'&&!reducedMotion?Math.sin(now*.005+i)*.035:0;
       a.beacon.visible=a.status!=='offline';a.beacon.material=mat(a.status==='blocked'?'#df795e':a.status==='working'?'#c7e7a8':'#d2d5c9');i++;}
@@ -122,6 +128,6 @@ export function createOfficeScene(container, { onSelect = () => {}, reducedMotio
       a.target.set(x,.08,z);i++;}},
     setCelebrating(value){if(value&&!celebrating)celebrationStart=performance.now();celebrating=value;},
     resetCamera(){targetYaw=.75;},
-    dispose(){disposed=true;cancelAnimationFrame(raf);observer.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',up);const geometries=new Set(),usedMaterials=new Set(materials.values()),textures=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material]){usedMaterials.add(m);if(m.map)textures.add(m.map);}}});for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of usedMaterials)m.dispose();renderer.dispose();renderer.domElement.remove();}
+    dispose(){disposed=true;cancelAnimationFrame(raf);observer.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',up);renderer.domElement.removeEventListener('pointercancel',cancel);renderer.domElement.removeEventListener('lostpointercapture',cancel);renderer.domElement.removeEventListener('webglcontextlost',lost);renderer.domElement.removeEventListener('webglcontextrestored',restored);const geometries=new Set(),usedMaterials=new Set(materials.values()),textures=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material]){usedMaterials.add(m);if(m.map)textures.add(m.map);}}});for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of usedMaterials)m.dispose();renderer.dispose();renderer.domElement.remove();}
   };
 }

@@ -1,0 +1,9 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {createPointerGesture,renderProfile} from '../src/input.js';
+const p=(x,y,id=1)=>({pointerId:id,clientX:x,clientY:y,button:0});
+test('tap with small finger jitter selects',()=>{const g=createPointerGesture();g.start(p(10,10));g.move(p(13,15));assert.equal(g.end(p(13,15)),true);});
+test('drag that returns to its origin never selects',()=>{const g=createPointerGesture();g.start(p(0,0));g.move(p(30,0));g.move(p(0,0));assert.equal(g.end(p(0,0)),false);});
+test('vertical scroll and pointercancel never select',()=>{const g=createPointerGesture();g.start(p(0,0));assert.equal(g.move(p(2,30)).horizontal,false);assert.equal(g.end(p(2,30)),false);g.start(p(0,0));g.cancel();assert.equal(g.end(p(0,0)),false);});
+test('pointerup displacement checked even without move',()=>{const g=createPointerGesture();g.start(p(0,0));assert.equal(g.end(p(30,0)),false);});
+test('second finger invalidates selection and cannot finish first pointer',()=>{const g=createPointerGesture();g.start(p(0,0));assert.equal(g.start(p(0,0,2)),false);assert.equal(g.end(p(0,0,2)),false);assert.equal(g.end(p(0,0)),false);});
+test('non-primary mouse button ignored',()=>{const g=createPointerGesture();assert.equal(g.start({...p(0,0),button:2}),false);assert.equal(g.end(p(0,0)),false);});
+test('mobile rendering caps cost without DPR inflation',()=>{assert.deepEqual(renderProfile({width:390,dpr:3}),{mobile:true,pixelRatio:1.25,fps:30,shadows:false});assert.equal(renderProfile({width:390,dpr:1}).pixelRatio,1);assert.equal(renderProfile({width:1200,coarse:true,dpr:2}).fps,30);assert.equal(renderProfile({width:1200,reducedMotion:true}).fps,15);assert.equal(renderProfile({width:1200}).shadows,true);});
