@@ -24,3 +24,8 @@ export function renderProfile({width,coarse=false,dpr=1,reducedMotion=false}) {
   const mobile=width<=720||coarse;
   return {mobile,pixelRatio:Math.min(dpr,mobile?1.25:1.7),fps:reducedMotion?15:mobile?30:60,shadows:!mobile};
 }
+
+// Finishing the timeline is not an explicit pause: allow a short celebration.
+export function sceneShouldPause({playing,completed,fault='none'}) {
+  return fault!=='none'||(!playing&&!completed);
+}

@@ -95,11 +95,11 @@ export function createOfficeScene(container, { onSelect = () => {}, onRenderStat
     const beacon=sphere(.07,'#d1e6b2',0,1.57,0,group);
     group.position.set(desk[0],.08,desk[1]+.9);
     group.traverse(o=>{if(o.isMesh){o.userData.agentId=id;pickables.push(o);}});
-    agents.set(id,{group,body,left,right,beacon,desk,status:'idle',target:new THREE.Vector3(desk[0],.08,desk[1]+.9)});
+    agents.set(id,{group,body,left,right,beacon,ring,desk,status:'idle',target:new THREE.Vector3(desk[0],.08,desk[1]+.9)});
   }
   const confetti=[];
   for(let i=0;i<38;i++){const m=box(.055,.12,.02,['#c1906d','#8fb09d','#e6bf62','#9a8bb6'][i%4],0,-10,0);m.visible=false;confetti.push(m);}
-  let celebrating=false, celebrationStart=0, disposed=false, raf=0, last=performance.now();
+  let celebrating=false, celebrationStart=0, paused=false, animationTime=0, disposed=false, raf=0, last=performance.now();
   const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();
   const gesture=createPointerGesture();let dragYaw=targetYaw,contextLost=false;
   const down=e=>{if(gesture.start(e)){dragYaw=targetYaw;renderer.domElement.setPointerCapture?.(e.pointerId);}};
@@ -111,22 +111,25 @@ export function createOfficeScene(container, { onSelect = () => {}, onRenderStat
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',cancel);renderer.domElement.addEventListener('lostpointercapture',cancel);renderer.domElement.addEventListener('webglcontextlost',lost);renderer.domElement.addEventListener('webglcontextrestored',restored);
   function resize(){const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;profile=renderProfile({width:w,coarse:matchMedia('(pointer: coarse)').matches,dpr:devicePixelRatio||1,reducedMotion});renderer.setPixelRatio(profile.pixelRatio);renderer.shadowMap.enabled=profile.shadows;renderer.setSize(w,h);camera.aspect=w/h;distance=w/h<1?24:19;camera.updateProjectionMatrix();}
   const observer=new ResizeObserver(resize);observer.observe(container);resize();
-  function tick(now){if(disposed||contextLost)return;if(document.hidden||now-last<1000/profile.fps){raf=requestAnimationFrame(tick);return;}const dt=Math.min((now-last)/1000,.05);last=now;yaw+=(targetYaw-yaw)*(reducedMotion?1:.12);camera.position.set(Math.sin(yaw)*Math.cos(pitch)*distance,Math.sin(pitch)*distance,Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(aim);
-    let i=0;for(const a of agents.values()){const delta=a.target.clone().sub(a.group.position);const moving=delta.length()>.035;if(reducedMotion)a.group.position.copy(a.target);else a.group.position.addScaledVector(delta,Math.min(1,dt*2.2));if(moving&&!reducedMotion)a.group.rotation.y=Math.atan2(delta.x,delta.z);else a.group.rotation.y=Math.PI;
-      const swing=moving&&!reducedMotion?Math.sin(now*.012+i)*.38:0;a.left.rotation.x=swing;a.right.rotation.x=-swing;a.body.rotation.x=a.status==='working'&&!reducedMotion?Math.sin(now*.005+i)*.035:0;
+  function tick(now){if(disposed||contextLost)return;if(document.hidden||now-last<1000/profile.fps){raf=requestAnimationFrame(tick);return;}const dt=Math.min((now-last)/1000,.05);last=now;if(!paused)animationTime+=dt*1000;yaw+=(targetYaw-yaw)*(reducedMotion?1:.12);camera.position.set(Math.sin(yaw)*Math.cos(pitch)*distance,Math.sin(pitch)*distance,Math.cos(yaw)*Math.cos(pitch)*distance);camera.lookAt(aim);
+    let i=0;for(const a of agents.values()){const delta=a.target.clone().sub(a.group.position);const moving=delta.length()>.035;if(reducedMotion)a.group.position.copy(a.target);else if(!paused)a.group.position.addScaledVector(delta,Math.min(1,dt*2.2));if(!paused){const heading=moving&&!reducedMotion?Math.atan2(delta.x,delta.z):a.status==='working'?Math.PI:0;const turn=Math.atan2(Math.sin(heading-a.group.rotation.y),Math.cos(heading-a.group.rotation.y));a.group.rotation.y+=turn*(reducedMotion?1:Math.min(1,dt*8));}
+      if(!paused){const swing=moving&&!reducedMotion?Math.sin(animationTime*.012+i)*.38:0;a.left.rotation.x=swing;a.right.rotation.x=-swing;a.body.rotation.x=a.status==='working'&&!reducedMotion?Math.sin(animationTime*.005+i)*.035:0;}
       a.beacon.visible=a.status!=='offline';a.beacon.material=mat(a.status==='blocked'?'#df795e':a.status==='working'?'#c7e7a8':'#d2d5c9');i++;}
-    for(let j=0;j<confetti.length;j++){const c=confetti[j];c.visible=celebrating&&!reducedMotion;if(c.visible){const t=((now-celebrationStart)/1000+j*.043)%2.5;c.position.set(Math.sin(j*4.3)*4,4-t*1.5,Math.cos(j*2.7)*3);c.rotation.set(t+j,t*2,j);}}
+    for(let j=0;j<confetti.length;j++){const c=confetti[j];c.visible=celebrating&&!reducedMotion&&animationTime-celebrationStart<4500;if(c.visible){const t=((animationTime-celebrationStart)/1000+j*.043)%2.5;c.position.set(Math.sin(j*4.3)*4,4-t*1.5,Math.cos(j*2.7)*3);c.rotation.set(t+j,t*2,j);}}
     renderer.render(scene,camera);raf=requestAnimationFrame(tick);
   }
   raf=requestAnimationFrame(tick);
   return {
-    setAgents(states){let i=0;for(const [id,a] of agents){const state=states.find(s=>s.id===id);a.status=state?.status||'offline';let x=a.desk[0],z=a.desk[1]+.9;
+    setAgents(states){let i=0;for(const [id,a] of agents){const state=states.find(s=>s.id===id),changed=a.status!==(state?.status||'offline');a.status=state?.status||'offline';let x=a.desk[0],z=a.desk[1]+.9;
       if(a.status==='idle'||a.status==='offline'){x=-4.25+i*.48;z=2.6;}
       if(a.status==='meeting'){const angle=i*Math.PI/2;x=3.55+Math.cos(angle)*1.1;z=2.15+Math.sin(angle)*1.1;}
       if(a.status==='waiting'){x=3.4;z=-2.9+i*.55;}
       if(a.status==='done'){x=-.7+i*.5;z=2.7;}
-      a.target.set(x,.08,z);i++;}},
-    setCelebrating(value){if(value&&!celebrating)celebrationStart=performance.now();celebrating=value;},
+      a.target.set(x,.08,z);if(paused&&changed)a.group.position.copy(a.target);i++;}},
+    setCelebrating(value){if(value&&!celebrating)celebrationStart=animationTime;celebrating=value;},
+    setPaused(value){paused=!!value;},
+    setReducedMotion(value){reducedMotion=!!value;resize();},
+    setSelected(id){for(const [key,a] of agents){a.ring.material.transparent=true;a.ring.material.opacity=key===id?1:.4;a.ring.scale.setScalar(key===id?1.35:1);}},
     resetCamera(){targetYaw=.75;},
     dispose(){disposed=true;cancelAnimationFrame(raf);observer.disconnect();renderer.domElement.removeEventListener('pointerdown',down);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',up);renderer.domElement.removeEventListener('pointercancel',cancel);renderer.domElement.removeEventListener('lostpointercapture',cancel);renderer.domElement.removeEventListener('webglcontextlost',lost);renderer.domElement.removeEventListener('webglcontextrestored',restored);const geometries=new Set(),usedMaterials=new Set(materials.values()),textures=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material]){usedMaterials.add(m);if(m.map)textures.add(m.map);}}});for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of usedMaterials)m.dispose();renderer.dispose();renderer.domElement.remove();}
   };

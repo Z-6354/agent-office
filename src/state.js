@@ -25,3 +25,16 @@ export function createPageCleanup(cleanup) {
   let disposed = false;
   return event => { if (event.persisted || disposed) return; disposed = true; cleanup(); };
 }
+
+export function roleDetail(index, roleId, fault='none') {
+  const states=snapshot(index,fault), role=states.find(r=>r.id===roleId);
+  if(!role)return {text:'未识别的角色',artifact:'暂无模拟产物'};
+  if(role.status==='offline')return {text:'模拟心跳已超时，无法确认编码角色是否仍在执行。等待恢复状态，不把旧进度当作实时结果。',artifact:'状态未知，不判断产物是否完成'};
+  if(role.status==='blocked')return {text:'模拟审阅遇到需要人工处理的问题。当前不允许继续推进，解除异常后再恢复演示。',artifact:'模拟反馈：需要人工确认'};
+  if(role.status==='idle')return {text:role.name+'角色当前没有执行中的任务，正在休息区等待下一次交接。',artifact:'当前没有新的模拟产物'};
+  if(role.status==='meeting')return {text:role.name+'角色正在参加模拟晨会，确认自己负责的'+role.job+'环节。',artifact:'模拟输入：统一目标与验收标准'};
+  if(role.status==='done')return {text:role.name+'角色在这一轮模拟中的职责已经结束。此状态不是对真实代码或模型执行结果的证明。',artifact:'演示结束，没有真实文件产出'};
+  if(role.status==='waiting')return {text:role.name+'角色正在等待上游交接，没有独立执行当前阶段。',artifact:'等待模拟任务交接'};
+  const work={supervisor:['主管正在汇总本轮模拟中的交付项、检查结果和未验证范围。','模拟产物：交付摘要'],planner:['规划角色正在拆解需求，整理页面、数据结构和验收清单。','模拟产物：任务拆解清单'],coder:[index===4?'编码角色正在按审阅反馈，补充空搜索结果的提示。':'编码角色正在实现模拟的搜索、标签与收藏模块。',index===4?'模拟产物：第二版修复':'模拟产物：第一版实现'],reviewer:[index===5?'审阅角色正在复查修复版本，独立确认此前反馈。':'审阅角色正在独立检查边界条件，本轮将发现空结果提示缺失。',index===5?'模拟产物：复核意见':'模拟产物：审阅反馈']};
+  return {text:work[roleId][0],artifact:work[roleId][1]};
+}
