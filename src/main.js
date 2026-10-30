@@ -1,4 +1,5 @@
 import './style.css';
+import {mountLiveView} from './live-view.js';
 import {createOfficeScene} from './office-scene.js';
 import {sceneShouldPause} from './input.js';
 import {createDemoController,readPreferences,writePreferences} from './demo-controller.js';
@@ -18,8 +19,10 @@ let preferences=readPreferences(storage,systemReduced);
 const controller=createDemoController(preferences);
 const renderNotice=document.createElement('div');renderNotice.className='render-notice';renderNotice.setAttribute('role','status');renderNotice.hidden=true;sceneHost.append(renderNotice);
 try{scene=createOfficeScene(sceneHost,{onSelect:selectAgent,onRenderState:state=>{renderNotice.hidden=state!=='recovering';renderNotice.textContent=state==='recovering'?'画面暂时中断，等待浏览器恢复。角色面板仍可使用。':'';},reducedMotion:preferences.reducedMotion});sceneHost.querySelector('.scene-loading')?.remove();}catch(error){sceneHost.innerHTML='<div class="fallback"><span>▧</span><h3>当前浏览器无法开启 3D</h3><p>你仍可以在角色面板查看状态，或用底部按钮体验完整工作流。试试支持 WebGL 的浏览器。</p></div>';console.warn('3D renderer unavailable:',error.message);}
+const liveView=mountLiveView({scene,onModeChange:()=>{controller.pause();render();},onSelect:selectAgent,getSelected:()=>selected});
 function selectAgent(id){selected=id;render();}
 function render(){
+  if(liveView.isLive()){liveView.render();return;}
   const state=controller.getState(),{index,fault,playing}=state;
   const focusRole=document.activeElement?.closest('.agent-row')?.dataset.role;
   const focusStage=document.activeElement?.closest('.step')?.dataset.stage;
@@ -54,5 +57,5 @@ document.querySelector('#camera').onclick=()=>scene?.resetCamera();
 document.querySelector('#fault').onchange=e=>{controller.setFault(e.target.value);render();};
 document.querySelector('#speed').onchange=e=>{preferences.seconds=Number(e.target.value);controller.setSpeed(preferences.seconds);writePreferences(storage,preferences);render();};
 document.querySelector('#motion').onchange=e=>{preferences.reducedMotion=e.target.checked;writePreferences(storage,preferences);scene?.setReducedMotion(preferences.reducedMotion);if(preferences.reducedMotion)controller.pause();render();};
-const timer=setInterval(()=>{if(document.hidden)return;const previous=controller.getState();const next=controller.tick();if(previous.index!==next.index)render();else updateAge(next.updatedAt);},1000);
-window.addEventListener('pagehide',createPageCleanup(()=>{clearInterval(timer);scene?.dispose();}));render();
+const timer=setInterval(()=>{if(document.hidden)return;if(liveView.isLive()){liveView.render();return;}const previous=controller.getState();const next=controller.tick();if(previous.index!==next.index)render();else updateAge(next.updatedAt);},1000);
+window.addEventListener('pagehide',createPageCleanup(()=>{clearInterval(timer);liveView.dispose();scene?.dispose();}));render();

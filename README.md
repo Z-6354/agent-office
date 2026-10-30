@@ -85,3 +85,15 @@ Three.js（MIT）和 Vite（MIT），版本固定于 package-lock.json。几何�
 - 人物转向平滑，选中角色有更清晰的地面标记。真实WebGL画面仍待支持GPU的设备验收。
 
 新增 `src/demo-controller.js` 管理可测试的本地状态转换，`src/input.js` 管理触控和渲染策略。24项单测覆盖异常期间暂停、重播时间、日志上限、偏好白名单、手势边界和完成动画策略。云端手机视口已验证禁用按钮、不同角色详情、偏好刷新保留而任务/日志不保留、完成后立即重播。
+
+### 只读 LIVE 前端（不会启动真实 Agent）
+
+默认仍是 DEMO。本地只读服务启动后，打开其同源页面，切换「只读观察 LIVE」，输入只读访问令牌并明确点击连接。浏览器只读取固定的 `/api/snapshot`，每 3 秒轮询；令牌放在 Authorization 请求头，只保存在连接内存中，不进入 URL、localStorage 或日志。断开、返回 DEMO、离开页面或请求失败都会结束连接；失败后需手动重连。不要在静态预览里输入模型 API 密钥。
+
+LIVE 隐藏演示阶段/异常/播放控件，没有派发、编辑或执行任务入口。心跳与任务进展单独显示；未上报、来源过期、网络断开或超过 10 秒未读到有效响应时，人物显示未知，而不是虚构空闲或进展。显示的是来源报告，不等于独立验收。历史事件仅保留在当前页面内存，服务端也是内存模式。当前静态 Sites 预览没有被连接到此后端；真实模型适配需要后续明确配置与授权。
+
+验证：前端契约/取消与迟到响应/鉴权失败/同源请求/状态过期测试，以及真实本地 HTTP 服务快照兼容性测试。此轮浏览器工具访问被权限检查阻止，未完成新的 DOM、WebGL 或真机触控验收；此前演示版测试不能替代本轮 LIVE 浏览器验收。
+
+### Optional DSH observation
+
+A local, explicit opt-in observer can mirror an **existing** DSH run into the planner role: `node adapters/dsh-observer.mjs --run-id EXISTING_RUN_ID`. It uses private environment credentials, calls only `dsh_status` (no new model turn), and never exposes remote model output to the public demo. It cannot dispatch tasks or call `dsh_run`; creating a real run requires a separate explicit owner request. See [the observation backend documentation](server/README.md#dsh-existing-run-observer-explicit-opt-in) for scoped setup and the verification boundary.
