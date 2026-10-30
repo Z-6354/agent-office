@@ -1,6 +1,6 @@
 # Agent Office
 
-独立的 AI 虚拟办公室交互演示。Vite + Three.js，纯静态、无后端、无模型调用，与 OpenSpace 无代码依赖。
+独立的 AI 虚拟办公室。Vite + Three.js；默认是纯静态模拟演示，可选本地认证后端提供只读 LIVE 观察。网页和观察后端均不调用模型，与 OpenSpace 无代码依赖。
 
 ## 本地运行
 
@@ -26,9 +26,9 @@ npm run dev
 
 ## 诚实的状态边界
 
-本项目当前**只有模拟数据**。不连接真实 Agent、服务器、Claude Code、Codex 或任何模型，不会执行任务、不消耗模型 Token。界面持续标注模拟状态。人物动画不是任务执行证据。
+默认 DEMO 和已部署的静态预览**只有模拟数据**，不会连接真实 Agent 或执行任务。可选 LIVE 模式仅显示认证后端收到的来源报告；既有 DSH run 观察器只查询状态，不派发任务或调用模型。人物动画和来源完成报告都不是独立验收证据。
 
-未来接入真实系统时应由可信生命周期事件产生状态，加入身份验证、心跳超时和任务版本，不能让旧状态永远显示为“工作中”。不要把密钥放进网页。
+LIVE 已包含身份验证、心跳过期和运行序号边界。公网实时部署仍未配置，需先确认隐私和访问范围，不能让旧状态永远显示为“工作中”。不要把模型密钥放进网页。
 
 ## 代码结构
 
@@ -97,3 +97,5 @@ LIVE 隐藏演示阶段/异常/播放控件，没有派发、编辑或执行任�
 ### Optional DSH observation
 
 A local, explicit opt-in observer can mirror an **existing** DSH run into the planner role: `node adapters/dsh-observer.mjs --run-id EXISTING_RUN_ID`. It uses private environment credentials, calls only `dsh_status` (no new model turn), and never exposes remote model output to the public demo. It cannot dispatch tasks or call `dsh_run`; creating a real run requires a separate explicit owner request. See [the observation backend documentation](server/README.md#dsh-existing-run-observer-explicit-opt-in) for scoped setup and the verification boundary.
+
+快照隐私边界：前端仅保留约定的角色和事件字段，丢弃额外字段，防止意外附带的后端元数据长期留在视图状态中。这不是网络层脱敏：来源仍须避免在消息或 HTTP 响应中发送秘密。

@@ -24,3 +24,34 @@ test('frontend accepts real loopback backend snapshot with unseen agents unknown
 });
 
 test('tokens require HTTPS or local loopback origin',()=>{assert.equal(safeLiveOrigin('http://example.com'),false);assert.equal(safeLiveOrigin('https://example.com'),true);assert.equal(safeLiveOrigin('http://127.0.0.1:8787'),true);assert.equal(safeLiveOrigin('file:///tmp/demo.html'),false);let called=false;const c=createLiveConnection({origin:'http://example.com',onChange:()=>{},fetcher:()=>called=true});c.connect('token');assert.equal(called,false);assert.equal(c.getState().phase,'insecure');});
+
+
+test('snapshot projection excludes unexpected private fields at every level',()=>{
+  const value=fixture();
+  value.providerToken='synthetic-secret';
+  Object.assign(value.agents[0],{apiKey:'synthetic-secret',providerOutput:{text:'private-output'}});
+  value.events=[{agentId:'planner',receivedAt:stamp,eventId:'event1',runId:'run1',sequence:2,
+    progress:40,type:'progress',status:'working',message:'public report',
+    password:'synthetic-secret',raw:{text:'private-output'}}];
+  const parsed=parseLiveSnapshot(value);
+  assert.equal(parsed.providerToken,undefined);
+  assert.deepEqual(Object.keys(parsed.agents[0]).sort(),[
+    'agentId','lastHeartbeatAt','lastProgressAt','message','progress','runId','sequence','stale','status'].sort());
+  assert.deepEqual(parsed.events[0],{agentId:'planner',receivedAt:stamp,eventId:'event1',runId:'run1',
+    sequence:2,progress:40,type:'progress',status:'working',message:'public report'});
+  assert.ok(!JSON.stringify(parsed).includes('synthetic-secret'));
+  assert.ok(!JSON.stringify(parsed).includes('private-output'));
+  value.agents[0].message='changed';value.events[0].message='changed';
+  assert.equal(parsed.agents[0].message,'source report');
+  assert.equal(parsed.events[0].message,'public report');
+});
+
+test('event projection bounds text and normalizes invalid optional fields',()=>{
+  const value=fixture();
+  value.events=[{agentId:'coder',receivedAt:stamp,eventId:'x'.repeat(100),runId:{private:'data'},
+    sequence:Infinity,progress:NaN,type:'x'.repeat(60),status:'x'.repeat(60),message:'x'.repeat(2000)}];
+  const [event]=parseLiveSnapshot(value).events;
+  assert.equal(event.eventId.length,80);assert.equal(event.runId,null);
+  assert.equal(event.sequence,null);assert.equal(event.progress,null);
+  assert.equal(event.type.length,40);assert.equal(event.status.length,40);assert.equal(event.message.length,1000);
+});

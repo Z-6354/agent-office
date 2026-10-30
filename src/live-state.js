@@ -3,6 +3,7 @@ const ids=new Set(roles.map(r=>r.id));
 const statuses=new Set(['idle','working','waiting','meeting','done','blocked','failed','cancelled']);
 const iso=value=>typeof value==='string'&&Number.isFinite(Date.parse(value));
 const short=(value,max=1000)=>typeof value==='string'?value.slice(0,max):'';
+const progress=value=>Number.isFinite(value)&&value>=0&&value<=100?value:null;
 export function parseLiveSnapshot(value){
   if(!value||value.schemaVersion!==1||!iso(value.observedAt)||!Array.isArray(value.agents)||!Array.isArray(value.events))throw new Error('invalid snapshot');
   const seen=new Set();
@@ -10,10 +11,16 @@ export function parseLiveSnapshot(value){
     if(!a||!ids.has(a.agentId)||seen.has(a.agentId)||!statuses.has(a.status)||typeof a.stale!=='boolean'||!Number.isSafeInteger(a.sequence)||a.sequence<0)throw new Error('invalid agent');
     seen.add(a.agentId);
     if(a.lastHeartbeatAt!==null&&!iso(a.lastHeartbeatAt)||a.lastProgressAt!==null&&!iso(a.lastProgressAt))throw new Error('invalid clock');
-    return {...a,message:short(a.message),runId:short(a.runId,128)||null,progress:typeof a.progress==='number'&&a.progress>=0&&a.progress<=100?a.progress:null};
+    // Copy only the public snapshot contract. Extra backend fields (including
+    // credentials or raw provider output) must not persist in view state.
+    return {agentId:a.agentId,status:a.status,stale:a.stale,sequence:a.sequence,
+      lastHeartbeatAt:a.lastHeartbeatAt,lastProgressAt:a.lastProgressAt,
+      message:short(a.message),runId:short(a.runId,128)||null,progress:progress(a.progress)};
   });
   if(agents.length!==4)throw new Error('missing agents');
-  const events=value.events.slice(-100).filter(e=>e&&ids.has(e.agentId)&&iso(e.receivedAt)).map(e=>({...e,message:short(e.message),type:short(e.type,40),status:short(e.status,40)}));
+  const events=value.events.slice(-100).filter(e=>e&&ids.has(e.agentId)&&iso(e.receivedAt)).map(e=>({agentId:e.agentId,receivedAt:e.receivedAt,eventId:short(e.eventId,80),
+    runId:short(e.runId,128)||null,sequence:Number.isSafeInteger(e.sequence)&&e.sequence>=0?e.sequence:null,
+    progress:progress(e.progress),message:short(e.message),type:short(e.type,40),status:short(e.status,40)}));
   return {schemaVersion:1,observedAt:value.observedAt,agents,events,durability:'memory-only'};
 }
 export function liveAgents(snapshot,connected,now=Date.now(),receivedAt=0){
