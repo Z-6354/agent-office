@@ -1,3 +1,67 @@
 # Agent Office
 
-独立 AI 虚拟办公室。交互演示源码正在准备提交；当前仅模拟数据，不连接或执行真实 Agent。
+独立的 AI 虚拟办公室交互演示。Vite + Three.js，纯静态、无后端、无模型调用，与 OpenSpace 无代码依赖。
+
+## 本地运行
+
+推荐 Node.js 24：
+
+```sh
+npm ci
+npm test
+npm run dev
+```
+
+生产构建：`npm run build`，静态产物位于 `dist/`。`npm run preview` 仅本地预览。
+
+## 已实现
+
+- 原创低多边形办公室：四个工位、会议区、沙发休息区、植物与灯光。
+- 主管、规划、编码、审阅四个角色；状态改变时人物移动。
+- 八阶段预设模拟任务，支持播放/暂停、重播、下一阶段、跳转阶段。
+- 点击 3D 人物或角色卡片查看任务详情。
+- 阻塞和心跳超时模拟，异常期间不自动推进。
+- 手机布局、键盘可操作角色/阶段按钮、减少动态偏好、WebGL 不可用时保留可操作文字面板。
+- 所有依赖打包到静态产物，不依赖运行时 CDN。
+
+## 诚实的状态边界
+
+本项目当前**只有模拟数据**。不连接真实 Agent、服务器、Claude Code、Codex 或任何模型，不会执行任务、不消耗模型 Token。界面持续标注模拟状态。人物动画不是任务执行证据。
+
+未来接入真实系统时应由可信生命周期事件产生状态，加入身份验证、心跳超时和任务版本，不能让旧状态永远显示为“工作中”。不要把密钥放进网页。
+
+## 代码结构
+
+- `src/office-scene.js`：无框架耦合的 Three.js 场景。
+- `src/state.js`：角色、阶段、状态投影，具备 Node 单元测试。
+- `src/main.js`：演示控制、角色详情和异常注入。
+- `src/style.css`：响应式界面。
+- `tests/state.test.mjs`：角色唯一性、独立审阅、异常和边界回归。
+
+场景接口：
+
+```js
+const scene = createOfficeScene(element, { onSelect(id) {}, reducedMotion: false });
+scene.setAgents([{ id: 'coder', status: 'working' }]);
+scene.setCelebrating(false);
+scene.resetCamera();
+scene.dispose();
+```
+
+角色 ID：`supervisor`、`planner`、`coder`、`reviewer`。状态：`idle`、`working`、`waiting`、`meeting`、`done`、`blocked`、`offline`。未提供的角色按离线显示。
+
+## 验证
+
+`npm test` 和 `npm run build` 已通过。云端浏览器已验证文字替代面板及交互，但其 WebGL 被环境禁用，未完成 3D 画面及触屏实际验收。不能把构建成功视为全部浏览器兼容性保证。建议验收桌面及 Android 浏览器：首次加载、拖拽、点击角色、播放暂停、阶段跳转、阻塞/离线、重播，以及 WebGL 不可用时的替代面板。
+
+## 依赖与素材
+
+Three.js（MIT）和 Vite（MIT），版本固定于 package-lock.json。几何模型、场景和页面代码为本项目制作；未复制参考帖的源码或美术资产。没有外部图片、字体、分析脚本或用户数据。
+
+## 独立服务器部署
+
+本项目是静态网页，无数据库、无API密钥、无Agent执行权限。先在隔离构建目录执行 `npm ci && npm test && npm run build`，核验后只发布 `dist/`。
+
+由服务器所有者确认目标主机、独立站点目录、端口或域名后，可让已有静态服务器指向该目录。不要覆盖其他站点、生产配置或开放未批准端口。首次验收可仅监听 localhost 的独立临时端口，再通过已授权通道访问；公网代理、TLS、防火墙和服务自启需单独按主机授权处理。Vite dev/preview 不是长期生产服务。
+
+上线前用桌面和手机检查3D渲染、人物选择、阶段切换、异常状态、返回页面恢复和WebGL降级，并保留上一份静态产物以便原子切换回滚。页面始终应标明模拟数据，不把部署成功说成真实Agent已经接入。
