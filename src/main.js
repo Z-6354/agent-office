@@ -1,3 +1,4 @@
+import {mountFleetView} from './fleet-view.js';
 import './style.css';
 import {mountLiveView} from './live-view.js';
 import {createOfficeScene} from './office-scene.js';
@@ -58,4 +59,5 @@ document.querySelector('#fault').onchange=e=>{controller.setFault(e.target.value
 document.querySelector('#speed').onchange=e=>{preferences.seconds=Number(e.target.value);controller.setSpeed(preferences.seconds);writePreferences(storage,preferences);render();};
 document.querySelector('#motion').onchange=e=>{preferences.reducedMotion=e.target.checked;writePreferences(storage,preferences);scene?.setReducedMotion(preferences.reducedMotion);if(preferences.reducedMotion)controller.pause();render();};
 const timer=setInterval(()=>{if(document.hidden)return;if(liveView.isLive()){liveView.render();return;}const previous=controller.getState();const next=controller.tick();if(previous.index!==next.index)render();else updateAge(next.updatedAt);},1000);
-window.addEventListener('pagehide',createPageCleanup(()=>{clearInterval(timer);liveView.dispose();scene?.dispose();}));render();
+const disposeFleet=mountFleetView();
+window.addEventListener('pagehide',createPageCleanup(()=>{disposeFleet();clearInterval(timer);liveView.dispose();scene?.dispose();}));render();
