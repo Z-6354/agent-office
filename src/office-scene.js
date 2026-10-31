@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {createPointerGesture,renderProfile} from './input.js';
 
 /** Standalone renderer. All states are supplied by the caller; no network or AI calls. */
-export function createOfficeScene(container, { onSelect = () => {}, onRenderState = () => {}, reducedMotion = false } = {}) {
+export function createOfficeScene(container, { onSelect = () => {}, onRenderState = () => {}, reducedMotion = false, agentDefinitions = null } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#e9e4d9');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -55,7 +55,7 @@ export function createOfficeScene(container, { onSelect = () => {}, onRenderStat
   for(let i=0;i<3;i++) box(.42,.08,.02,['#6e8d78','#d4a364','#7d9cac'][i],2.6+i*.48,1.13,-4.02);
   // Work zone.
   box(6.2,.025,3.9,'#c3cbb5',.7,.065,-1.15);
-  const roleDefs=[['supervisor','#aa744e',[-1.2,-2.45]],['planner','#699687',[1.55,-2.45]],['coder','#668caa',[-1.2,.1]],['reviewer','#a68cb0',[1.55,.1]]];
+  const roleDefs=agentDefinitions||[['supervisor','#aa744e',[-1.2,-2.45]],['planner','#699687',[1.55,-2.45]],['coder','#668caa',[-1.2,.1]],['reviewer','#a68cb0',[1.55,.1]]];
   for(const [,color,[x,z]] of roleDefs) {
     box(2.05,.13,1.08,'#e5b77e',x,.91,z);
     for(const dx of [-.82,.82])for(const dz of [-.35,.35]) box(.09,.86,.09,'#f3f1e7',x+dx,.46,z+dz);
